@@ -1,0 +1,53 @@
+@import "tailwindcss";
+
+:root {
+  --bg: #0c0a09;
+  --surface: #161412;
+  --surface2: #1e1b18;
+  --border: #2a2520;
+  --amber: #d97706;
+  --amber-light: #f59e0b;
+  --amber-dim: #92400e;
+  --text: #f5f0eb;
+  --text-muted: #a8a09a;
+  --text-dim: #5c5550;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: "Georgia", "Times New Roman", serif;
+  min-height: 100vh;
+}
+
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: var(--surface); }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+::-webkit-scrollbar-thumb:hover { background: var(--amber-dim); }
+
+@keyframes slideInRight {
+  from { transform: translateX(100%); opacity: 0; }
+  to   { transform: translateX(0);    opacity: 1; }
+}
+.slide-in { animation: slideInRight 0.35s cubic-bezier(0.22, 1, 0.36, 1) forwards; }
+
+@keyframes fadeUp {
+  from { transform: translateY(12px); opacity: 0; }
+  to   { transform: translateY(0);    opacity: 1; }
+}
+.fade-up { animation: fadeUp 0.3s ease forwards; }
+
+.crosshair { cursor: crosshair; }
+
+@keyframes pulse-amber {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.3; }
+}
+.pulse-amber { animation: pulse-amber 1.2s ease-in-out infinite; }

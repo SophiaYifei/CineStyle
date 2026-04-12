@@ -1,0 +1,26 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.env
+.venv/
+venv/
+
+# Data (large files)
+data/raw/
+data/processed/
+models/faiss_index/*.index
+models/ncf_reranker/*.pt
+models/baselines/*.pkl
+
+# Notebooks checkpoints
+.ipynb_checkpoints/
+
+# Frontend
+frontend/node_modules/
+frontend/.next/
+frontend/.env.local
+
+# OS
+.DS_Store
