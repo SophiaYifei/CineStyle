@@ -30,6 +30,9 @@ DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 _model: CLIPModel | None = None
 _processor: CLIPProcessor | None = None
 
+# Dummy image needed so CLIPProcessor can produce both image + text tensors together
+_DUMMY_TEXT = ["fashion item"]
+
 
 def _load_model() -> tuple[CLIPModel, CLIPProcessor]:
     global _model, _processor
@@ -41,6 +44,41 @@ def _load_model() -> tuple[CLIPModel, CLIPProcessor]:
     return _model, _processor
 
 
+def _get_image_embeds(
+    images: list[Image.Image],
+    model: CLIPModel,
+    processor: CLIPProcessor,
+) -> torch.Tensor:
+    """Return L2-normalised image embeddings. Shape: (N, 512)."""
+    inputs = processor(
+        images=images,
+        text=_DUMMY_TEXT * len(images),
+        return_tensors="pt",
+        padding=True,
+    ).to(DEVICE)
+    out = model(**inputs)
+    feats: torch.Tensor = out.image_embeds          # (N, 512)
+    return feats / feats.norm(dim=-1, keepdim=True)
+
+
+def _get_text_embeds(
+    labels: list[str],
+    model: CLIPModel,
+    processor: CLIPProcessor,
+) -> torch.Tensor:
+    """Return L2-normalised text embeddings. Shape: (N, 512)."""
+    dummy_img = Image.new("RGB", (224, 224))
+    inputs = processor(
+        images=[dummy_img] * len(labels),
+        text=labels,
+        return_tensors="pt",
+        padding=True,
+    ).to(DEVICE)
+    out = model(**inputs)
+    feats: torch.Tensor = out.text_embeds           # (N, 512)
+    return feats / feats.norm(dim=-1, keepdim=True)
+
+
 def embed_image(image: Image.Image) -> dict:
     """
     Embed a PIL image with FashionCLIP.
@@ -48,10 +86,10 @@ def embed_image(image: Image.Image) -> dict:
     """
     model, processor = _load_model()
 
-    # --- Attribute classification via text prompts ---
     garment_labels = [
         "dress", "top", "blouse", "jacket", "coat", "pants", "jeans",
         "skirt", "shorts", "suit", "sweater", "hoodie", "shirt",
+        "bag", "shoes", "hat", "scarf", "belt", "watch", "glasses",
     ]
     color_labels = [
         "black", "white", "red", "blue", "green", "yellow",
@@ -63,35 +101,29 @@ def embed_image(image: Image.Image) -> dict:
     ]
 
     with torch.no_grad():
-        inputs = processor(images=image, return_tensors="pt").to(DEVICE)
-        image_features = model.get_image_features(**inputs)
-        image_features = image_features / image_features.norm(dim=-1, keepdim=True)
+        img_feat = _get_image_embeds([image], model, processor).squeeze(0)  # (512,)
 
         def classify(labels: list[str]) -> str:
-            text_inputs = processor(
-                text=labels, return_tensors="pt", padding=True
-            ).to(DEVICE)
-            text_features = model.get_text_features(**text_inputs)
-            text_features = text_features / text_features.norm(dim=-1, keepdim=True)
-            sims = (image_features @ text_features.T).squeeze(0)
+            txt_feats = _get_text_embeds(labels, model, processor)          # (N, 512)
+            sims = (img_feat.unsqueeze(0) @ txt_feats.T).squeeze(0)        # (N,)
             return labels[sims.argmax().item()]
 
         garment_type = classify(garment_labels)
         color = classify(color_labels)
         aesthetic = classify(aesthetic_labels)
-        embedding = image_features.squeeze(0).cpu().float().tolist()
 
     return {
         "garment_type": garment_type,
         "color": color,
         "aesthetic": aesthetic,
-        "embedding": embedding,
+        "embedding": img_feat.cpu().float().tolist(),
     }
 
 
-def build_index(batch_size: int = 64) -> None:
+def build_index(batch_size: int = 128) -> None:
     """
     Embed all products in catalog.jsonl and build a FAISS index.
+    Optimised for GPU (A100): large batch_size, torch.cuda.amp.autocast.
     """
     model, processor = _load_model()
     catalog_path = PROC_DIR / "catalog.jsonl"
@@ -100,52 +132,49 @@ def build_index(batch_size: int = 64) -> None:
         catalog = [json.loads(line) for line in f]
 
     dim = 512
-    index = faiss.IndexFlatIP(dim)  # inner product on L2-normalised vectors == cosine sim
-    meta = []
+    index = faiss.IndexFlatIP(dim)  # cosine sim via inner product on L2-normalised vecs
+    meta: list[dict] = []
 
-    embeddings_batch = []
-    meta_batch = []
+    images_batch: list[Image.Image] = []
+    meta_batch: list[dict] = []
 
-    def flush(embeddings_batch, meta_batch):
-        arr = np.stack(embeddings_batch).astype(np.float32)
+    def flush() -> None:
+        with torch.no_grad(), torch.cuda.amp.autocast(enabled=(DEVICE == "cuda")):
+            feats = _get_image_embeds(images_batch, model, processor)
+        arr = feats.cpu().float().numpy().astype(np.float32)
         faiss.normalize_L2(arr)
         index.add(arr)
         meta.extend(meta_batch)
+        images_batch.clear()
+        meta_batch.clear()
 
     for item in tqdm(catalog, desc="Embedding catalog"):
         try:
             url = item["image_url"]
             if url.startswith("http://") or url.startswith("https://"):
                 import io as _io
-                response = requests.get(url, timeout=5)
+                response = requests.get(url, timeout=8)
                 img = Image.open(_io.BytesIO(response.content)).convert("RGB")
             else:
-                # Local file path (e.g. from Fashionpedia crops)
                 img = Image.open(url).convert("RGB")
         except Exception:
             continue
 
-        with torch.no_grad():
-            inputs = processor(images=img, return_tensors="pt").to(DEVICE)
-            feats = model.get_image_features(**inputs)
-            feats = feats / feats.norm(dim=-1, keepdim=True)
-            embeddings_batch.append(feats.squeeze(0).cpu().float().numpy())
-
+        images_batch.append(img)
         meta_batch.append({
             "id": item["id"],
             "title": item["title"],
-            "brand": item["brand"],
+            "brand": item.get("brand", ""),
             "price": item["price"],
             "image_url": item["image_url"],
             "product_url": item.get("product_url", ""),
         })
 
-        if len(embeddings_batch) >= batch_size:
-            flush(embeddings_batch, meta_batch)
-            embeddings_batch, meta_batch = [], []
+        if len(images_batch) >= batch_size:
+            flush()
 
-    if embeddings_batch:
-        flush(embeddings_batch, meta_batch)
+    if images_batch:
+        flush()
 
     faiss.write_index(index, str(INDEX_DIR / "products.index"))
     with open(INDEX_DIR / "meta.json", "w") as f:

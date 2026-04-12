@@ -16,7 +16,7 @@ ultralytics>=8.2.0          # YOLOv8
 open-clip-torch>=2.24.0
 
 # Vector search
-faiss-cpu>=1.8.0            # swap for faiss-gpu on CUDA
+faiss-gpu>=1.7.2            # GPU index on A100; use faiss-cpu for CPU-only environments
 
 # NCF re-ranker
 numpy>=1.26.0
@@ -32,6 +32,9 @@ pandas>=2.2.0
 
 # Evaluation
 rouge-score>=0.1.2
+
+# LLM / Agents
+openai>=1.30.0              # Duke LiteLLM API (OpenAI-compatible)
 
 # Dev
 python-dotenv>=1.0.0
