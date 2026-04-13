@@ -13,6 +13,18 @@ from pathlib import Path
 HF_REPO = "YifeiGuo/cinestyle-assets"
 
 
+def _safe_extractall(tar: tarfile.TarFile, dest: Path) -> None:
+    """Extract *tar* into *dest*, rejecting members that would escape the directory."""
+    dest = dest.resolve()
+    for member in tar.getmembers():
+        member_path = (dest / member.name).resolve()
+        if not str(member_path).startswith(str(dest) + "/") and member_path != dest:
+            raise ValueError(
+                f"Unsafe tar member blocked (path traversal attempt): {member.name!r}"
+            )
+        tar.extract(member, path=dest)
+
+
 def download():
     from huggingface_hub import snapshot_download
 
@@ -51,9 +63,10 @@ def download():
     crops_tar = cache / "crops.tar.gz"
     if crops_tar.exists() and not crops_dst.exists():
         print(f"  Extracting {crops_tar} ...")
-        crops_dst.parent.mkdir(parents=True, exist_ok=True)
+        extract_dir = Path("data/raw").resolve()
+        extract_dir.mkdir(parents=True, exist_ok=True)
         with tarfile.open(crops_tar, "r:gz") as tar:
-            tar.extractall(path="data/raw")
+            _safe_extractall(tar, extract_dir)
         print(f"  EXTRACTED crops -> {crops_dst}")
     elif crops_dst.exists():
         print(f"  EXISTS {crops_dst}")
