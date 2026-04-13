@@ -86,39 +86,51 @@ def generate_eval_chart():
 
 
 def generate_tuning_chart():
-    """Bar + line chart for hyperparameter tuning."""
+    """Side-by-side bar charts for hyperparameter tuning."""
     with open(OUT / "hyperparam_tuning.json") as f:
         data = json.load(f)
 
     dims = [int(d) for d in data.keys()]
+    dim_labels = [str(d) for d in dims]
     ndcgs = [data[str(d)]["ndcg@10"] for d in dims]
     losses = [data[str(d)]["final_loss"] for d in dims]
 
-    fig, ax1 = plt.subplots(figsize=(7, 4))
+    best_idx = ndcgs.index(max(ndcgs))
 
-    bars = ax1.bar([str(d) for d in dims], ndcgs, color="#d97706", alpha=0.85,
-                   edgecolor="white", linewidth=0.5, label="NDCG@10")
-    ax1.set_xlabel("embed_dim")
-    ax1.set_ylabel("NDCG@10", color="#d97706")
-    ax1.tick_params(axis="y", labelcolor="#d97706")
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 4.5))
 
-    for bar, val in zip(bars, ndcgs):
-        ax1.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.0002,
-                 f"{val:.4f}", ha="center", va="bottom", fontsize=9)
-
-    ax2 = ax1.twinx()
-    ax2.plot([str(d) for d in dims], losses, "o-", color="#ef4444",
-             linewidth=2, markersize=6, label="Final Loss")
-    ax2.set_ylabel("BPR Loss", color="#ef4444")
-    ax2.tick_params(axis="y", labelcolor="#ef4444")
-
-    ax1.set_title("NCF Hyperparameter Tuning: embed_dim", fontweight="bold", pad=12)
+    # Left: NDCG@10
+    ndcg_colors = ["#3b82f6"] * len(dims)
+    ndcg_colors[best_idx] = "#10b981"  # highlight best
+    bars1 = ax1.bar(dim_labels, ndcgs, color=ndcg_colors, alpha=0.9,
+                    edgecolor="white", linewidth=0.5)
+    ax1.set_xlabel("embed_dim", fontsize=12)
+    ax1.set_ylabel("NDCG@10", fontsize=12)
+    ax1.set_title("NDCG@10 by embed_dim", fontweight="bold", fontsize=13)
+    for bar, val in zip(bars1, ndcgs):
+        ax1.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.0003,
+                 f"{val:.4f}", ha="center", va="bottom", fontsize=10, fontweight="bold")
+    ax1.set_ylim(0, max(ndcgs) * 1.3)
     ax1.spines["top"].set_visible(False)
+    ax1.spines["right"].set_visible(False)
+    ax1.grid(axis="y", alpha=0.3)
 
-    lines1, labels1 = ax1.get_legend_handles_labels()
-    lines2, labels2 = ax2.get_legend_handles_labels()
-    ax1.legend(lines1 + lines2, labels1 + labels2, loc="upper right", framealpha=0.9)
+    # Right: BPR Loss
+    bars2 = ax2.bar(dim_labels, losses, color="#ef4444", alpha=0.8,
+                    edgecolor="white", linewidth=0.5)
+    ax2.set_xlabel("embed_dim", fontsize=12)
+    ax2.set_ylabel("Final BPR Loss", fontsize=12)
+    ax2.set_title("Training Loss by embed_dim", fontweight="bold", fontsize=13)
+    for bar, val in zip(bars2, losses):
+        ax2.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.005,
+                 f"{val:.3f}", ha="center", va="bottom", fontsize=10, fontweight="bold")
+    ax2.set_ylim(0, max(losses) * 1.2)
+    ax2.spines["top"].set_visible(False)
+    ax2.spines["right"].set_visible(False)
+    ax2.grid(axis="y", alpha=0.3)
 
+    fig.suptitle("NCF Hyperparameter Tuning: embed_dim", fontweight="bold",
+                 fontsize=14, y=1.02)
     plt.tight_layout()
     plt.savefig(OUT / "hyperparam_tuning.png", dpi=150, bbox_inches="tight")
     plt.close()
