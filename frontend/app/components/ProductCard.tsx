@@ -41,7 +41,9 @@ export default function ProductCard({ product, index }: ProductCardProps) {
         e.currentTarget.style.transform = "translateY(0)";
       }}
       onClick={() => {
-        if (product.product_url) window.open(product.product_url, "_blank");
+        if (product.product_url) {
+          window.open(product.product_url, "_blank", "noopener,noreferrer");
+        }
       }}
     >
       {/* Product image */}
