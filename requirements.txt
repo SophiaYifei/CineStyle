@@ -32,6 +32,7 @@ pandas>=2.2.0
 
 # Evaluation
 rouge-score>=0.1.2
+matplotlib>=3.8.0
 
 # LLM / Agents
 openai>=1.30.0              # Duke LiteLLM API (OpenAI-compatible)
