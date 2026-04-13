@@ -18,7 +18,7 @@ def _safe_extractall(tar: tarfile.TarFile, dest: Path) -> None:
     dest = dest.resolve()
     for member in tar.getmembers():
         member_path = (dest / member.name).resolve()
-        if not str(member_path).startswith(str(dest) + "/") and member_path != dest:
+        if not member_path.is_relative_to(dest):
             raise ValueError(
                 f"Unsafe tar member blocked (path traversal attempt): {member.name!r}"
             )
