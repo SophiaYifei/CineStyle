@@ -28,7 +28,11 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-app.mount("/static", StaticFiles(directory="data/raw/crops"), name="crops")
+app.mount(
+    "/static",
+    StaticFiles(directory="data/raw/crops", check_directory=False),
+    name="crops",
+)
 
 class GarmentResponse(BaseModel):
     garment_type: str
