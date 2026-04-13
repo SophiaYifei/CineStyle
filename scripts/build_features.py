@@ -1,3 +1,4 @@
+# AI tools used: Claude (Anthropic) assisted with FashionCLIP processor API usage, FAISS index construction, and resolving a faiss/torch library conflict.
 """
 build_features.py
 
@@ -12,12 +13,9 @@ Also exports embed_image() for use by the FastAPI backend.
 import json
 from pathlib import Path
 
-import faiss
 import numpy as np
-import requests
 import torch
 from PIL import Image
-from tqdm import tqdm
 from transformers import CLIPModel, CLIPProcessor
 
 PROC_DIR = Path("data/processed")
@@ -33,6 +31,23 @@ _processor: CLIPProcessor | None = None
 # Dummy image needed so CLIPProcessor can produce both image + text tensors together
 _DUMMY_TEXT = ["fashion item"]
 
+# Pre-computed text embeddings cache (computed once at model load time)
+_text_embeds_cache: dict[str, tuple[list[str], torch.Tensor]] = {}
+
+_GARMENT_LABELS = [
+    "dress", "top", "blouse", "jacket", "coat", "pants", "jeans",
+    "skirt", "shorts", "suit", "sweater", "hoodie", "shirt",
+    "bag", "shoes", "hat", "scarf", "belt", "watch", "glasses",
+]
+_COLOR_LABELS = [
+    "black", "white", "red", "blue", "green", "yellow",
+    "pink", "purple", "brown", "grey", "beige", "navy",
+]
+_AESTHETIC_LABELS = [
+    "casual", "formal", "streetwear", "bohemian", "minimalist",
+    "old money", "dark academia", "cottagecore", "y2k", "preppy",
+]
+
 
 def _load_model() -> tuple[CLIPModel, CLIPProcessor]:
     global _model, _processor
@@ -42,6 +57,34 @@ def _load_model() -> tuple[CLIPModel, CLIPProcessor]:
         _processor = CLIPProcessor.from_pretrained(MODEL_NAME)
         _model.eval()
     return _model, _processor
+
+
+def _get_cached_text_embeds(
+    key: str,
+    labels: list[str],
+    model: CLIPModel,
+    processor: CLIPProcessor,
+) -> torch.Tensor:
+    """Return cached text embeddings, computing on first call.
+    Processes labels one-by-one to avoid OOM/segfault on CPU."""
+    if key not in _text_embeds_cache:
+        dummy_img = Image.new("RGB", (224, 224))
+        parts = []
+        with torch.no_grad():
+            for label in labels:
+                inputs = processor(
+                    images=[dummy_img],
+                    text=[label],
+                    return_tensors="pt",
+                    padding=True,
+                ).to(DEVICE)
+                out = model(**inputs)
+                parts.append(out.text_embeds)  # (1, 512)
+        feats = torch.cat(parts, dim=0)  # (N, 512)
+        feats = feats / feats.norm(dim=-1, keepdim=True)
+        _text_embeds_cache[key] = (labels, feats)
+        print(f"Cached text embeddings for '{key}' ({len(labels)} labels)")
+    return _text_embeds_cache[key][1]
 
 
 def _get_image_embeds(
@@ -86,31 +129,17 @@ def embed_image(image: Image.Image) -> dict:
     """
     model, processor = _load_model()
 
-    garment_labels = [
-        "dress", "top", "blouse", "jacket", "coat", "pants", "jeans",
-        "skirt", "shorts", "suit", "sweater", "hoodie", "shirt",
-        "bag", "shoes", "hat", "scarf", "belt", "watch", "glasses",
-    ]
-    color_labels = [
-        "black", "white", "red", "blue", "green", "yellow",
-        "pink", "purple", "brown", "grey", "beige", "navy",
-    ]
-    aesthetic_labels = [
-        "casual", "formal", "streetwear", "bohemian", "minimalist",
-        "old money", "dark academia", "cottagecore", "y2k", "preppy",
-    ]
-
     with torch.no_grad():
         img_feat = _get_image_embeds([image], model, processor).squeeze(0)  # (512,)
 
-        def classify(labels: list[str]) -> str:
-            txt_feats = _get_text_embeds(labels, model, processor)          # (N, 512)
-            sims = (img_feat.unsqueeze(0) @ txt_feats.T).squeeze(0)        # (N,)
+        def classify(key: str, labels: list[str]) -> str:
+            txt_feats = _get_cached_text_embeds(key, labels, model, processor)
+            sims = (img_feat.unsqueeze(0) @ txt_feats.T).squeeze(0)
             return labels[sims.argmax().item()]
 
-        garment_type = classify(garment_labels)
-        color = classify(color_labels)
-        aesthetic = classify(aesthetic_labels)
+        garment_type = classify("garment", _GARMENT_LABELS)
+        color = classify("color", _COLOR_LABELS)
+        aesthetic = classify("aesthetic", _AESTHETIC_LABELS)
 
     return {
         "garment_type": garment_type,
@@ -125,6 +154,10 @@ def build_index(batch_size: int = 128) -> None:
     Embed all products in catalog.jsonl and build a FAISS index.
     Optimised for GPU (A100): large batch_size, torch.cuda.amp.autocast.
     """
+    import faiss
+    import requests
+    from tqdm import tqdm
+
     model, processor = _load_model()
     catalog_path = PROC_DIR / "catalog.jsonl"
 

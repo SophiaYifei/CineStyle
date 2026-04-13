@@ -1,0 +1,14 @@
+{
+  "hd": {
+    "mean_cosine_vs_hd": 1.0000000298023224,
+    "mean_P@10_vs_hd": 1.0
+  },
+  "compressed": {
+    "mean_cosine_vs_hd": 0.8692288219928741,
+    "mean_P@10_vs_hd": 0.37499999999999994
+  },
+  "blurred": {
+    "mean_cosine_vs_hd": 0.7144842177629471,
+    "mean_P@10_vs_hd": 0.09999999999999999
+  }
+}

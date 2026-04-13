@@ -87,13 +87,13 @@ export default function FrameCapture({ onFrame }: FrameCaptureProps) {
           }}
         >
           <div style={{ fontSize: "2.5rem", marginBottom: "16px", opacity: 0.5 }}>
-            &#9654;
+            &#128247;
           </div>
           <p style={{ color: "var(--text)", fontSize: "1.05rem", marginBottom: "8px" }}>
-            Drop a still or video here
+            Drop a film still or screenshot here
           </p>
           <p style={{ color: "var(--text-muted)", fontSize: "0.85rem" }}>
-            JPG, PNG, GIF · MP4, MOV, WEBM
+            JPG, PNG, WEBP
           </p>
         </div>
       )}
@@ -203,7 +203,7 @@ export default function FrameCapture({ onFrame }: FrameCaptureProps) {
       <input
         ref={fileRef}
         type="file"
-        accept="image/*,video/*"
+        accept="image/*"
         style={{ display: "none" }}
         onChange={(e) => {
           const file = e.target.files?.[0];

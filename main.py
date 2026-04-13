@@ -1,3 +1,5 @@
+# AI tools used: Claude (Anthropic) assisted with FastAPI endpoint
+# structure, CORS configuration, and static file serving setup.
 """
 CineStyle — FastAPI backend entry point.
 
@@ -7,6 +9,7 @@ Endpoints:
   GET  /health     — liveness check
 """
 
+from fastapi.staticfiles import StaticFiles
 from fastapi import FastAPI, File, UploadFile, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -25,7 +28,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
+app.mount("/static", StaticFiles(directory="data/raw/crops"), name="crops")
 
 class GarmentResponse(BaseModel):
     garment_type: str

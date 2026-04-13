@@ -1,3 +1,4 @@
+# AI tools used: Claude (Anthropic) assisted with HuggingFace datasets APIintegration, synthetic interaction generation logic, and debugging.
 """
 make_dataset.py
 

@@ -1,0 +1,52 @@
+[
+  {
+    "rank": 3,
+    "probe_id": "150314",
+    "probe_category": "dress",
+    "probe_image": "data/raw/crops/150314.jpg",
+    "rec_id": "118792",
+    "rec_category": "top, t-shirt, sweatshirt",
+    "rec_image": "data/raw/crops/118792.jpg",
+    "similarity": 0.781329333782196
+  },
+  {
+    "rank": 2,
+    "probe_id": "158953",
+    "probe_category": "sweater",
+    "probe_image": "data/raw/crops/158953.jpg",
+    "rec_id": "127695",
+    "rec_category": "top, t-shirt, sweatshirt",
+    "rec_image": "data/raw/crops/127695.jpg",
+    "similarity": 0.7972933650016785
+  },
+  {
+    "rank": 4,
+    "probe_id": "158959",
+    "probe_category": "sock",
+    "probe_image": "data/raw/crops/158959.jpg",
+    "rec_id": "135840",
+    "rec_category": "tights, stockings",
+    "rec_image": "data/raw/crops/135840.jpg",
+    "similarity": 0.7935267686843872
+  },
+  {
+    "rank": 3,
+    "probe_id": "158960",
+    "probe_category": "sock",
+    "probe_image": "data/raw/crops/158960.jpg",
+    "rec_id": "167859",
+    "rec_category": "tights, stockings",
+    "rec_image": "data/raw/crops/167859.jpg",
+    "similarity": 0.7271849513053894
+  },
+  {
+    "rank": 2,
+    "probe_id": "169203",
+    "probe_category": "shirt, blouse",
+    "probe_image": "data/raw/crops/169203.jpg",
+    "rec_id": "169207",
+    "rec_category": "jacket",
+    "rec_image": "data/raw/crops/169207.jpg",
+    "similarity": 0.9373903274536133
+  }
+]

@@ -12,7 +12,7 @@ data/raw/
 data/processed/
 models/faiss_index/*.index
 models/ncf_reranker/*.pt
-models/baselines/*.pkl
+models/sasrec/*.pt
 
 # Notebooks checkpoints
 .ipynb_checkpoints/
@@ -24,3 +24,4 @@ frontend/.env.local
 
 # OS
 .DS_Store
+Thumbs.db

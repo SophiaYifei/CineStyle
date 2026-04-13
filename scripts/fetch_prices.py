@@ -1,3 +1,4 @@
+# AI tools used: Claude (Anthropic) assisted with LiteLLM API integration and retry/backoff logic for the price enrichment agent.
 """
 fetch_prices.py  —  Agentic price enrichment using Duke's LiteLLM API.
 

@@ -38,11 +38,12 @@ Viewers regularly notice clothing in shows and films but have no frictionless wa
 
 | Approach | Model | Role |
 |---|---|---|
-| Naive baseline | Popularity-based recommender (most-clicked items in same genre) | Baseline |
-| Classical ML | KNN with CLIP visual embeddings + cosine similarity | Item retrieval |
-| Deep learning | Fine-tuned CLIP or FashionCLIP + NCF-style re-ranker | Final model |
+| Naive baseline | Popularity-based recommender (most-interacted items globally) | Baseline |
+| Classical ML | FAISS KNN with FashionCLIP visual embeddings + cosine similarity | Candidate retrieval |
+| Deep learning (feedforward) | NeuMF re-ranker (GMF + MLP with BPR loss) | Re-ranking |
+| Deep learning (Transformer) | SASRec (Self-Attentive Sequential Recommendation) | Sequential re-ranking |
 
-All three are implemented, documented, and benchmarked. The deployed app uses the deep learning model.
+All four are implemented, documented, and benchmarked in `scripts/evaluate.py`. The deployed app uses the full four-stage pipeline (FAISS → NeuMF → SASRec → diversity filter).
 
 ### Evaluation Strategy
 
@@ -58,9 +59,17 @@ All three are implemented, documented, and benchmarked. The deployed app uses th
 
 ### Experiment
 
-**Experiment: Frame quality vs. recommendation accuracy**
+**Experiment 1: Frame quality vs. recommendation accuracy**
 
 We vary the input frame quality (full HD, compressed, blurred) and measure how retrieval precision degrades. Motivation: real users will capture frames via screenshot on various devices. This tests robustness of the vision pipeline to real-world degradation.
+
+**Experiment 2: NCF hyperparameter tuning (embed_dim)**
+
+We sweep `embed_dim` across [16, 32, 64, 128, 256] for the NeuMF re-ranker, training each variant for 10 epochs and evaluating NDCG@10. Results saved to `data/outputs/hyperparam_tuning.json`.
+
+**Error Analysis: Category mispredictions**
+
+We identify 5 representative cases where FAISS retrieval returns a top-5 item from a different garment category than the query (e.g., querying a dress but retrieving shoes). Results with probe/recommendation image pairs saved to `data/outputs/error_analysis.json`.
 
 ---
 
@@ -136,28 +145,26 @@ cinestyle/
 ├── scripts/
 │   ├── make_dataset.py              # Download + preprocess DeepFashion2, Polyvore
 │   ├── build_features.py            # Extract CLIP embeddings, build FAISS index
-│   ├── model.py                     # Train NCF re-ranker
-│   └── evaluate.py                  # Offline eval: Precision@K, NDCG@K, MAP@K
+│   ├── model.py                     # Train NCF + SASRec re-rankers
+│   └── evaluate.py                  # Offline eval, hyperparameter tuning, error analysis
 ├── models/
 │   ├── faiss_index/                 # Product embedding index
 │   ├── ncf_reranker/                # Trained NCF weights
-│   └── baselines/                   # KNN and popularity models
+│   └── sasrec/                      # Trained SASRec weights
 ├── data/
 │   ├── raw/                         # Raw dataset downloads
 │   ├── processed/                   # Embeddings, interaction logs
 │   └── outputs/                     # Eval results, experiment logs
 ├── notebooks/
-│   ├── 01_eda.ipynb
-│   ├── 02_embedding_exploration.ipynb
-│   ├── 03_model_comparison.ipynb
-│   └── 04_experiment_frame_quality.ipynb
+│   └── cinestyle_pipeline.ipynb     # End-to-end pipeline notebook
 ├── frontend/                        # Next.js UI
 │   ├── app/
 │   │   ├── page.tsx                 # Main viewer interface
 │   │   ├── components/
-│   │   │   ├── FrameCapture.tsx     # Video frame selection
+│   │   │   ├── FrameCapture.tsx     # Image upload + frame selection
 │   │   │   ├── GarmentHighlight.tsx # Click-to-select overlay
-│   │   │   └── RecommendationCard.tsx
+│   │   │   ├── ResultPanel.tsx      # Slide-in identification + recommendations
+│   │   │   └── ProductCard.tsx      # Product recommendation card
 │   └── ...
 └── .gitignore
 ```
@@ -214,14 +221,18 @@ python scripts/make_dataset.py
 python scripts/build_features.py   # builds FAISS index
 ```
 
-**Train re-ranker:**
+**Train re-rankers:**
 ```bash
-python scripts/model.py --epochs 10 --batch_size 256
+python scripts/model.py --train --epochs 10 --batch_size 256
+python scripts/model.py --train_sasrec --epochs 20 --batch_size 256
 ```
 
-**Evaluate:**
+**Evaluate (four-model comparison):**
 ```bash
 python scripts/evaluate.py --k 5 --k 10
+python scripts/evaluate.py --tune              # NCF hyperparameter sweep
+python scripts/evaluate.py --error_analysis    # category misprediction analysis
+python scripts/evaluate.py --experiment        # frame quality degradation
 ```
 
 ---

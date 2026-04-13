@@ -1,3 +1,8 @@
+# AI tools used: Claude (Anthropic) assisted with SASRec causal mask
+# implementation, BPR loss formulation, and torch.load map_location
+# compatibility fix for CPU-only environments.
+# SASRec reference: Kang & McAuley, "Self-Attentive Sequential
+# Recommendation", ICDM 2018.
 """
 model.py
 
@@ -25,7 +30,6 @@ import json
 import math
 from pathlib import Path
 
-import faiss
 import numpy as np
 import torch
 import torch.nn as nn
@@ -41,11 +45,13 @@ SASREC_DIR.mkdir(parents=True, exist_ok=True)
 # Stage 1 — FAISS KNN retrieval (classical ML baseline)
 # ---------------------------------------------------------------------------
 
-_faiss_index: faiss.Index | None = None
+_faiss_index = None  # faiss.Index, loaded lazily
 _meta: list[dict] | None = None
 
 
 def _load_index():
+    """Load and cache the FAISS product index and metadata from disk."""
+    import faiss
     global _faiss_index, _meta
     if _faiss_index is None:
         _faiss_index = faiss.read_index(str(INDEX_DIR / "products.index"))
@@ -56,6 +62,7 @@ def _load_index():
 
 def faiss_retrieve(embedding: np.ndarray, top_k: int = 50) -> list[dict]:
     """Return top_k nearest neighbors from the FAISS product index."""
+    import faiss
     index, meta = _load_index()
     query = embedding.reshape(1, -1).astype(np.float32)
     faiss.normalize_L2(query)
@@ -159,6 +166,7 @@ class BPRDataset(Dataset):
 
 
 def bpr_loss(pos_scores: torch.Tensor, neg_scores: torch.Tensor) -> torch.Tensor:
+    """Bayesian Personalized Ranking loss: -log(sigmoid(pos - neg))."""
     return -torch.log(torch.sigmoid(pos_scores - neg_scores) + 1e-8).mean()
 
 
@@ -351,9 +359,11 @@ def train_sasrec(
     max_seq_len: int = 50,
     dropout: float = 0.2,
 ) -> None:
+    """Train a SASRec model on user interaction sequences with BCE loss."""
     interactions_path = Path("data/processed/interactions.jsonl")
 
     # Load embeddings from FAISS index
+    import faiss
     with open(INDEX_DIR / "meta.json") as f:
         meta = json.load(f)
     index = faiss.read_index(str(INDEX_DIR / "products.index"))
@@ -415,6 +425,7 @@ def train_sasrec(
 
 
 def train_ncf(epochs: int = 10, batch_size: int = 256, lr: float = 1e-3) -> None:
+    """Train a NeuMF model on implicit feedback with BPR loss."""
     from scripts.build_features import _load_model
     import json
 
@@ -427,6 +438,7 @@ def train_ncf(epochs: int = 10, batch_size: int = 256, lr: float = 1e-3) -> None
     with open(INDEX_DIR / "meta.json") as f:
         meta = json.load(f)
     # For training we use stored embeddings reconstructed from FAISS
+    import faiss
     index = faiss.read_index(str(INDEX_DIR / "products.index"))
     stored = faiss.rev_swig_ptr(index.get_xb(), index.ntotal * 512).reshape(index.ntotal, 512)
     embeddings = {meta[i]["id"]: stored[i] for i in range(len(meta))}
@@ -518,30 +530,32 @@ _sasrec_model: SASRec | None = None
 
 
 def _load_ncf() -> NeuMF | None:
+    """Load cached NeuMF model from disk, or return None if not trained."""
     global _ncf_model
     ncf_path = NCF_DIR / "ncf.pt"
     cfg_path = NCF_DIR / "config.pt"
     if not ncf_path.exists():
         return None
     if _ncf_model is None:
-        cfg = torch.load(cfg_path, weights_only=True)
+        cfg = torch.load(cfg_path, weights_only=True, map_location="cpu")
         m = NeuMF(n_users=cfg["n_users"])
-        m.load_state_dict(torch.load(ncf_path, weights_only=True))
+        m.load_state_dict(torch.load(ncf_path, weights_only=True, map_location="cpu"))
         m.eval()
         _ncf_model = m
     return _ncf_model
 
 
 def _load_sasrec() -> SASRec | None:
+    """Load cached SASRec model from disk, or return None if not trained."""
     global _sasrec_model
     pt_path = SASREC_DIR / "sasrec.pt"
     cfg_path = SASREC_DIR / "config.pt"
     if not pt_path.exists():
         return None
     if _sasrec_model is None:
-        cfg = torch.load(cfg_path, weights_only=True)
+        cfg = torch.load(cfg_path, weights_only=True, map_location="cpu")
         m = SASRec(**cfg)
-        m.load_state_dict(torch.load(pt_path, weights_only=True))
+        m.load_state_dict(torch.load(pt_path, weights_only=True, map_location="cpu"))
         m.eval()
         _sasrec_model = m
     return _sasrec_model
