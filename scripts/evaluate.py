@@ -175,6 +175,7 @@ def _sasrec_rerank(sasrec_model, candidates, user_history_embs, embeddings, devi
                   for c in candidates]),
         dtype=torch.float32,
     ).to(device)
+    sasrec_model = sasrec_model.to(device)
     sasrec_model.eval()
     with torch.no_grad():
         scores = sasrec_model(seq_batch, target_embs).cpu().numpy()
