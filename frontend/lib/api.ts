@@ -2,7 +2,7 @@
  * CineStyle API client — talks to the FastAPI backend.
  */
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+const API_BASE = (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000").replace(/\/+$/, "");
 
 export interface GarmentResult {
   garment_type: string;

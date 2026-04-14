@@ -3,7 +3,7 @@
 import { useState } from "react";
 import type { ProductCard as ProductCardType } from "@/lib/api";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+const API_BASE = (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000").replace(/\/+$/, "");
 
 /** Extract filename from image_url like "data/raw/crops/12345.jpg" → full static URL */
 function toStaticUrl(imageUrl: string): string {
